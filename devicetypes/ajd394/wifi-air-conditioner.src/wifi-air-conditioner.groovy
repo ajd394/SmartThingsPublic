@@ -42,8 +42,8 @@ metadata {
         attribute "fanMode", "enum", ["off","low","med","high"]
         command "toggleFanMode"
         command "setFanMode", ["string"]
-        command "tempUp"
-        command "tempDown"
+        command "incrementSetpoint"
+        command "decrementSetpoint"
 	}
 
 	simulator {
@@ -74,14 +74,14 @@ metadata {
 		}
         
         valueTile("coolingSetpoint", "device.coolingSetpoint", inactiveLabel: false, decoration: "flat") {
-			state "coolingSetpoint", label:'${currentValue}° Set', unit:"", backgroundColor:"#ffffff"
+			state "coolingSetpoint", label:'${currentValue}° Set', unit:"F", backgroundColor:"#ffffff"
 		}
         
         standardTile("coolLevelUp", "device.coolingSetpoint", canChangeIcon: false, inactiveLabel: false, decoration: "flat") {
-            state "coolLevelUp", action:"tempUp", backgroundColor:"#d04e00", icon:"st.thermostat.thermostat-up"
+            state "coolLevelUp", action:"incrementSetpoint", backgroundColor:"#d04e00", icon:"st.thermostat.thermostat-up"
         }
         standardTile("coolLevelDown", "device.coolingSetpoint", canChangeIcon: false, inactiveLabel: false, decoration: "flat") {
-            state "coolLevelDown", action:"tempDown", backgroundColor: "#1e9cbb", icon:"st.thermostat.thermostat-down"
+            state "coolLevelDown", action:"decrementSetpoint", backgroundColor: "#1e9cbb", icon:"st.thermostat.thermostat-down"
         }
         
         standardTile("refresh", "device.temperature", inactiveLabel: false, decoration: "flat") {
@@ -95,7 +95,7 @@ metadata {
 
 //variables
 def getFanModes(){["off","low","med","high"]}
-def getDeviceGETTokens(){["fanMode":"__SL_G_UFN","coolingSetpoint":"__SL_G_USP"]}
+def getDevicePOSTTokens(){["fanMode":"__SL_P_UFN","coolingSetpoint":"__SL_P_USP"]}
 
 // parse events into attributes
 def parse(String description) {
@@ -109,12 +109,12 @@ def parse(String description) {
     def body = msg.body              // => request body as a string
     def status = msg.status          // => http status code of the response
     def json = msg.json              // => any JSON included in response body, as a data structure of lists and maps
-    def xml = msg.xml                // => any XML included in response body, as a document tree structure
     def data = msg.data              // => either JSON or XML in response body (whichever is specified by content-type header in response)
 	//log.info status
     if(status == 200){
         if(json.fanMode){
-            result.add(createEvent(name: "fanMode", value: "$json.fanMode"))
+        	def modeInt = getFanModes()[json.fanMode.toInteger()];
+            result.add(createEvent(name: "fanMode", value: "$modeInt"))
             log.info "Updating fan mode to: $json.fanMode"
         }
         if(json.coolingSetpoint){
@@ -125,6 +125,9 @@ def parse(String description) {
             result.add(createEvent(name: "temperature", value: "$json.temperature"))
             log.info "Updating temperature to: $json.temperature"
         }
+   }else if(status == 302){
+   		//log.info "Successful Post" + stripPath(msg.headers.location)
+        //this.refresh();
    }else{
         log.debug "Error: Bad Message Recieved"
         log.debug msg
@@ -136,10 +139,7 @@ def parse(String description) {
 
 def refresh() {
 	log.debug "Executing 'refresh'"
-    updateDNI()
-    log.info "DNI: $device.deviceNetworkId"
-    log.info "DNI: $state.dni"
-    
+    updateDNI()    
     return getAll()
 }
 
@@ -153,50 +153,91 @@ def configure(){
   	return refresh()
 }
 
+//run after prefs
+def updated() {
+	log.info "$device.displayName updated with settings: ${settings.inspect()}"
+
+    state.dni = createDNI(settings.confIpAddr, settings.confTcpPort)
+    state.hostAddress = "${settings.confIpAddr}:${settings.confTcpPort}"
+    
+    updateDNI()
+    //setDefaults()
+}
 
 // handle device commands
-def setCoolingSetpoint() {
-	log.debug "Executing 'setCoolingSetpoint'"
-	// TODO: handle 'setCoolingSetpoint' command
-    sendEvent(name: "coolingSetpoint", value: "temp")
-}
+
+//setters
 
 def toggleFanMode(){
 	log.debug "Executing 'toggleFanMode'"
     
    	def modeOrder = getFanModes()
-    def next = modeOrder[modeOrder.indexOf(device.currentValue("fanMode")) + 1] ?: modeOrder[0]
+    def next = (modeOrder.indexOf(device.currentValue("fanMode")) + 1) % 4
     setFanMode(next)
 }	
 
-
 def setFanMode(mode){
 	def name = "fanMode"
-    def token = getDeviceGETTokens()[name]
-    setVars(["$token":mode])
+    def token = getDevicePOSTTokens()[name]
+    return setAttrs(["$token":mode])
 }
 
-def tempUp(){
+def incrementSetpoint(){
 	def name = "coolingSetpoint"
 	def val = device.currentValue("$name")
-    def token = getDeviceGETTokens()[name]
-	setVars(["$token":val+1])
+    def token = getDevicePOSTTokens()[name]
+	return setAttrs(["$token":val+1])
 }
 
-def tempDown(){
+def decrementSetpoint(){
 	def name = "coolingSetpoint";
 	def val = device.currentValue("$name")
-    def token = getDeviceGETTokens()[name]
-	setVars(["$token":val-1])
+    def token = getDevicePOSTTokens()[name]
+	return setAttrs(["$token":val-1])
 }
 
-def setVars(varsMap){
-	//"builds" query string formatß
+
+//getters
+private def getTemp(){
+	def attrName = "temperature"
+	return getAttr(attrName)
+}
+
+private def getSetpoint(){
+	def attrName = "coolingSetpoint"
+	return getAttr(attrName)
+}
+
+private def getFanMode(){
+	def attrName = "fanMode"
+    return getAttr(attrName)
+}
+
+private def getAll(){
+	def attrName = "all"
+    return getAttr(attrName)
+}
+
+//helper
+
+private def getAttr(attrName){
+	def result = new physicalgraph.device.HubAction(
+        method: "GET",
+        path: formPath(attrName),
+        headers: [
+            HOST: getHostAddress()
+        ]
+    )
+    return result
+}
+
+private def setAttrs(varsMap){
+	//"builds" query string format
 	def body = varsMap.collect{ it }.join('&')
     
 	def result = new physicalgraph.device.HubAction(
         method: "POST",
-        path: "/",
+        path: "/all.json",
         headers: [
             HOST: getHostAddress(),
             "Content-Type":"application/x-www-form-urlencoded"
@@ -207,52 +248,14 @@ def setVars(varsMap){
     return result
 }
 
-def getTemp(){
-	def result = new physicalgraph.device.HubAction(
-        method: "GET",
-        path: "/temp.json",
-        headers: [
-            HOST: getHostAddress()
-        ]
-    )
-    return result
+
+private String formPath(attrName) {
+    return "/$attrName" + ".json"
 }
 
-def getSetpoint(){
-	def result = new physicalgraph.device.HubAction(
-        method: "GET",
-        path: "/setpoint.json",
-        headers: [
-            HOST: getHostAddress()
-        ]
-    )
-    return result
+private String stripPath(path) {
+    return path[1..-6]
 }
-
-def getFanMode(){
-	def result = new physicalgraph.device.HubAction(
-        method: "GET",
-        path: "/fan.json",
-        headers: [
-            HOST: getHostAddress()
-        ]
-    )
-    return result
-}
-
-def getAll(){
-	def result = new physicalgraph.device.HubAction(
-        method: "GET",
-        path: "/all.json",
-        headers: [
-            HOST: getHostAddress()
-        ]
-    )
-    return result
-}
-
-
-//helper
 
 private String createDNI(ipaddr, port) { 
     log.info "createDNI(${ipaddr}, ${port})"
@@ -286,16 +289,4 @@ private getHostAddress() {
 	def ip = convertHexToIP(parts[0])
 	def port = convertHexToInt(parts[1])
 	return ip + ":" + port
-}
-
-
-//run after prefs
-def updated() {
-	log.info "$device.displayName updated with settings: ${settings.inspect()}"
-
-    state.dni = createDNI(settings.confIpAddr, settings.confTcpPort)
-    state.hostAddress = "${settings.confIpAddr}:${settings.confTcpPort}"
-    
-    updateDNI()
-    //setDefaults()
 }
