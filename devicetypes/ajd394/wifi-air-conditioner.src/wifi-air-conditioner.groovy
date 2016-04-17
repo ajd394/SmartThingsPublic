@@ -115,7 +115,7 @@ def parse(String description) {
         if(json.fanMode){
         	def modeInt = getFanModes()[json.fanMode.toInteger()];
             result.add(createEvent(name: "fanMode", value: "$modeInt"))
-            log.info "Updating fan mode to: $json.fanMode"
+            log.info "Updating fan mode to: $modeInt"
         }
         if(json.coolingSetpoint){
             result.add(createEvent(name: "coolingSetpoint", value: "$json.coolingSetpoint"))
@@ -126,13 +126,15 @@ def parse(String description) {
             log.info "Updating temperature to: $json.temperature"
         }
    }else if(status == 302){
-   		//log.info "Successful Post" + stripPath(msg.headers.location)
-        //this.refresh();
-   }else{
+        log.info "Successful Post"
+        //log.info msg
+        sendHubCommand(getAll())
+        //result = getAll() //returns a HubAction Object
+    }else{
         log.debug "Error: Bad Message Recieved"
         log.debug msg
     }
-   return result
+    return result
 }
 
 //handle mgmnt. commands
@@ -244,10 +246,9 @@ private def setAttrs(varsMap){
         ],
         body: body
     )
-    log.info result
+    //log.info result
     return result
 }
-
 
 private String formPath(attrName) {
     return "/$attrName" + ".json"
