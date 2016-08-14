@@ -13,7 +13,10 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
- 
+
+import physicalgraph.zigbee.clusters.iaszone.ZoneStatus
+
+
 metadata {
 	definition (name: "NYCE Open/Closed Sensor", namespace: "smartthings", author: "NYCE") {
     	capability "Battery"
@@ -24,10 +27,11 @@ metadata {
         command "enrollResponse"
  
  
-		fingerprint inClusters: "0000,0001,0003,0406,0500,0020", manufacturer: "NYCE", model: "3011"
-        fingerprint inClusters: "0000,0001,0003,0500,0020", manufacturer: "NYCE", model: "3011"
-        fingerprint inClusters: "0000,0001,0003,0406,0500,0020", manufacturer: "NYCE", model: "3014"
-        fingerprint inClusters: "0000,0001,0003,0500,0020", manufacturer: "NYCE", model: "3014"
+ 		fingerprint inClusters: "0000,0001,0003,0500,0020", manufacturer: "NYCE", model: "3010", deviceJoinName: "NYCE Door Hinge Sensor"
+		fingerprint inClusters: "0000,0001,0003,0406,0500,0020", manufacturer: "NYCE", model: "3011", deviceJoinName: "NYCE Door/Window Sensor"
+        fingerprint inClusters: "0000,0001,0003,0500,0020", manufacturer: "NYCE", model: "3011", deviceJoinName: "NYCE Door/Window Sensor"
+        fingerprint inClusters: "0000,0001,0003,0406,0500,0020", manufacturer: "NYCE", model: "3014", deviceJoinName: "NYCE Tilt Sensor"
+        fingerprint inClusters: "0000,0001,0003,0500,0020", manufacturer: "NYCE", model: "3014", deviceJoinName: "NYCE Tilt Sensor"
 	}
  
 	simulator {
@@ -218,40 +222,33 @@ private Map parseReportAttributeMessage(String description) {
 }
 
 private List parseIasMessage(String description) {
-	List parsedMsg = description.split(" ")
-	String msgCode = parsedMsg[2]
+	ZoneStatus zs = zigbee.parseZoneStatus(description)
+	log.debug "parseIasMessage: $description"
 
 	List resultListMap = []
 	Map resultMap_battery = [:]
 	Map resultMap_battery_state = [:]
 	Map resultMap_sensor = [:]
 
-	// Relevant bit field definitions from ZigBee spec
-	def BATTERY_BIT = ( 1 << 3 )
-	def TROUBLE_BIT = ( 1 << 6 )
-	def SENSOR_BIT = ( 1 << 0 )		// it's ALARM1 bit from the ZCL spec
-
-	// Convert hex string to integer
-	def zoneStatus = Integer.parseInt(msgCode[-4..-1],16)
-
-	log.debug "parseIasMessage: zoneStatus: ${zoneStatus}"
+	resultMap_sensor.name = "contact"
+	resultMap_sensor.value = zs.isAlarm1Set() ? "open" : "closed"
 
 	// Check each relevant bit, create map for it, and add to list
-	log.debug "parseIasMessage: Battery Status ${zoneStatus & BATTERY_BIT}"
-	log.debug "parseIasMessage: Trouble Status ${zoneStatus & TROUBLE_BIT}"
-	log.debug "parseIasMessage: Sensor Status ${zoneStatus & SENSOR_BIT}"
+	log.debug "parseIasMessage: Battery Status ${zs.battery}"
+	log.debug "parseIasMessage: Trouble Status ${zs.trouble}"
+	log.debug "parseIasMessage: Sensor Status ${zs.alarm1}"
 
 	/* 	Comment out this path to check the battery state to avoid overwriting the
 		battery value (Change log #2), but keep these conditions for later use
 	 resultMap_battery_state.name = "battery_state"
-	 if (zoneStatus & TROUBLE_BIT) {
+	 if (zs.isTroubleSet()) {
 		 resultMap_battery_state.value = "failed"
 
 		 resultMap_battery.name = "battery"
 		 resultMap_battery.value = 0
 	 }
 	 else {
-		 if (zoneStatus & BATTERY_BIT) {
+		 if (zs.isBatterySet()) {
 			 resultMap_battery_state.value = "low"
 
 			 // to generate low battery notification by the platform
@@ -268,9 +265,6 @@ private List parseIasMessage(String description) {
 		 }
 	 }
 	*/
-
-	resultMap_sensor.name = "contact"
-	resultMap_sensor.value = (zoneStatus & SENSOR_BIT) ? "open" : "closed"
 
 	resultListMap << resultMap_battery_state
 	resultListMap << resultMap_battery
