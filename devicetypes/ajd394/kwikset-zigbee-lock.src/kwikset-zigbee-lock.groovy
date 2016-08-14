@@ -9,19 +9,29 @@ metadata {
 	}
 
 	// UI tile definitions
-	tiles {
-		standardTile("lock", "device.lock", width: 2, height: 2, canChangeIcon: true) {
-			state "locked", label: '${name}', action: "lock.unlock", icon: "st.locks.lock.locked", backgroundColor:"#79b821", nextState:"unlocking"
-			state "unlocked", label: '${name}', action: "lock.lock", icon: "st.locks.lock.unlocked", backgroundColor:"#ffa81e", nextState:"locking"
-			state "locking", label: '${name}', action: "lock.unlock", icon: "st.locks.lock.locked", backgroundColor:"#79b821", nextState:"unlocking"
-			state "unlocking", label: '${name}', action: "lock.lock", icon: "st.locks.lock.unlocked", backgroundColor:"#ffa81e", nextState:"locking"
+	tiles(scale: 2) {
+	multiAttributeTile(name:"toggle", type:"generic", width:6, height:4){
+		tileAttribute ("device.lock", key:"PRIMARY_CONTROL") {
+			attributeState "locked", label:'locked', action:"lock.unlock", icon:"st.locks.lock.locked", backgroundColor:"#79b821", nextState:"unlocking"
+			attributeState "unlocked", label:'unlocked', action:"lock.lock", icon:"st.locks.lock.unlocked", backgroundColor:"#ffffff", nextState:"locking"
+			attributeState "unknown", label:"unknown", action:"lock.lock", icon:"st.locks.lock.unknown", backgroundColor:"#ffffff", nextState:"locking"
+			attributeState "locking", label:'locking', icon:"st.locks.lock.locked", backgroundColor:"#79b821"
+			attributeState "unlocking", label:'unlocking', icon:"st.locks.lock.unlocked", backgroundColor:"#ffffff"
 		}
-		standardTile("refresh", "device.lock", inactiveLabel: false, decoration: "flat") {
-			state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
-		}
-		main(["lock"])
-		details(["lock", "refresh"])
 	}
+	standardTile("lock", "device.lock", inactiveLabel:false, decoration:"flat", width:2, height:2) {
+		state "default", label:'lock', action:"lock.lock", icon:"st.locks.lock.locked", nextState:"locking"
+	}
+	standardTile("unlock", "device.lock", inactiveLabel:false, decoration:"flat", width:2, height:2) {
+		state "default", label:'unlock', action:"lock.unlock", icon:"st.locks.lock.unlocked", nextState:"unlocking"
+	}
+	standardTile("refresh", "device.refresh", inactiveLabel:false, decoration:"flat", width:2, height:2) {
+		state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
+	}
+
+	main "toggle"
+	details(["toggle", "lock", "unlock", "refresh"])
+}
 }
 
 // Public methods
@@ -53,7 +63,7 @@ def refresh() {
 	//REMOVE debug only
 	//configure()
 	[
-		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.LOCK} 0x0000", "delay 200",
+		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.LOCK} 0x${lock_attr.LOCKSTATE}", "delay 200",
 		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.BASIC} 0x0000",
 	]
 }
