@@ -5,7 +5,7 @@ metadata {
 		capability "Refresh"
 		capability "Lock Codes"
 
-		fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,000A,0101", outClusters: "000A,0019"
+		fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0101", outClusters: "000A,0019"
 	}
 
 	// UI tile definitions
