@@ -126,10 +126,8 @@ def parse(String description) {
             log.info "Updating temperature to: $json.temperature"
         }
    }else if(status == 302){
-        log.info "Successful Post"
-        //log.info msg
-        sendHubCommand(getAll())
-        //result = getAll() //returns a HubAction Object
+        log.info "Successful Post " + stripPath(msg.headers.location)
+        sendHubCommand(getAttr(stripPath(msg.headers.location)))
     }else{
         log.debug "Error: Bad Message Recieved"
         log.debug msg
@@ -142,7 +140,7 @@ def parse(String description) {
 def refresh() {
 	log.debug "Executing 'refresh'"
     updateDNI()    
-    return getAll()
+    return getAttr("all")
 }
 
 def configure(){
@@ -180,44 +178,19 @@ def toggleFanMode(){
 
 def setFanMode(mode){
 	def name = "fanMode"
-    def token = getDevicePOSTTokens()[name]
-    return setAttrs(["$token":mode])
+    return setAttr("$name",mode)
 }
 
 def incrementSetpoint(){
 	def name = "coolingSetpoint"
 	def val = device.currentValue("$name")
-    def token = getDevicePOSTTokens()[name]
-	return setAttrs(["$token":val+1])
+	return setAttr("$name",val+1)
 }
 
 def decrementSetpoint(){
 	def name = "coolingSetpoint";
 	def val = device.currentValue("$name")
-    def token = getDevicePOSTTokens()[name]
-	return setAttrs(["$token":val-1])
-}
-
-
-//getters
-private def getTemp(){
-	def attrName = "temperature"
-	return getAttr(attrName)
-}
-
-private def getSetpoint(){
-	def attrName = "coolingSetpoint"
-	return getAttr(attrName)
-}
-
-private def getFanMode(){
-	def attrName = "fanMode"
-    return getAttr(attrName)
-}
-
-private def getAll(){
-	def attrName = "all"
-    return getAttr(attrName)
+	return setAttr("$name",val-1)
 }
 
 //helper
@@ -233,20 +206,23 @@ private def getAttr(attrName){
     return result
 }
 
-private def setAttrs(varsMap){
+private def setAttr(name,value){
 	//"builds" query string format
-	def body = varsMap.collect{ it }.join('&')
+    def token = getDevicePOSTTokens()[name]
+	def body = "$token=$value"
+    def path = formPath(name)
     
 	def result = new physicalgraph.device.HubAction(
         method: "POST",
-        path: "/all.json",
+        path: path,
         headers: [
             HOST: getHostAddress(),
             "Content-Type":"application/x-www-form-urlencoded"
         ],
         body: body
     )
-    //log.info result
+    log.debug result
+
     return result
 }
 
