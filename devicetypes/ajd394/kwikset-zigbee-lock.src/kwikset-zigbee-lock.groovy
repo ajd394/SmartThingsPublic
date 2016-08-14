@@ -1,14 +1,12 @@
 metadata {
-	// Automatically generated. Make future change here.
 	definition (name: "Kwikset Zigbee Lock", namespace: "ajd394", author: "Andrew DiPrinzio") {
 		capability "Polling"
 		capability "Actuator"
 		capability "Lock"
 		capability "Refresh"
-		capability "Temperature Measurement"
 		capability "Lock Codes"
 
-		fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0101,0402", outClusters: "0019"
+		fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0101", outClusters: "000A,0019"
 	}
 
 	// UI tile definitions
@@ -22,21 +20,8 @@ metadata {
 		standardTile("refresh", "device.lock", inactiveLabel: false, decoration: "flat") {
 			state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
 		}
-		valueTile("temperature", "device.temperature") {
-			state("temperature", label:'${currentValue}°', unit:"F",
-				backgroundColors:[
-					[value: 31, color: "#153591"],
-					[value: 44, color: "#1e9cbb"],
-					[value: 59, color: "#90d2a7"],
-					[value: 74, color: "#44b621"],
-					[value: 84, color: "#f1d801"],
-					[value: 95, color: "#d04e00"],
-					[value: 96, color: "#bc2323"]
-				]
-			)
-		}
 		main(["lock"])
-		details(["lock", "refresh", "temperature"])
+		details(["lock", "refresh"])
 	}
 }
 
@@ -80,8 +65,10 @@ def refresh() {
 	//REMOVE debug only
 	configure()
 	[
+		"st rattr 0x${zigbee.deviceNetworkId} 0x${zigbee.endpointId} 0x${clust.BASIC} 4", "delay 200",
+		"st rattr 0x${zigbee.deviceNetworkId} 0x${zigbee.endpointId} 0x${clust.BASIC} 5", "delay 200",
 		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.LOCK} 0x0000", "delay 200",
-		//"st rattr 0x${device.deviceNetworkId} 1 0x${clust.TEMP} 0x0000",
+		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.BASIC} 0x0000",
 	]
 }
 
@@ -93,13 +80,8 @@ def configure() {
 		"zcl global send-me-a-report 0x${clust.LOCK} 0x0000 0x${types.ENUM8} 5 3600 {}", "delay 200",
 		"send 0x${device.deviceNetworkId} 1 2", "delay 1500",
 
-		//TEMP
-		//"zcl global send-me-a-report 0x${clust.TEMP} 0x0000 0x${types.INT16S} 300 3600 {6400}", "delay 200",
-		//"send 0x${device.deviceNetworkId} 1 1", "delay 1500",
-
 		//bind
 		"zdo bind 0x${device.deviceNetworkId} 1 2 0x${clust.LOCK} {${device.zigbeeId}} {}", "delay 200",
-		//"zdo bind 0x${device.deviceNetworkId} 1 1 0x${clust.TEMP} {${device.zigbeeId}} {}", "delay 200",
 
 	]
 	//return configCmds + refresh() // send refresh cmds as part of config
@@ -138,19 +120,13 @@ private Map parseCatchAllMessage(String description) {
 	log.debug "msg ${msg}"
 	if (shouldProcessMessage(msg)) {
 		switch(msg.clusterId) {
-			/*case 0x0402:
-				// temp is last 2 data values. reverse to swap endian
-				String temp = msg.data[-2..-1].reverse().collect { msg.hex1(it) }.join()
-				def value = getTemperature(temp)
-				resultMap = getTemperatureResult(value)
-				break
-				*/
 			case 0x0101:
-				log.debug 'lock unknown data'
 				if(msg.command == 0x00){
 						if(msg.data[0]== 0x00){
 							resultMap = [name: "lock", value: 'locked']
 						}
+				}else {
+					log.debug 'lock unknown data'
 				}
 				break
 		}
@@ -168,37 +144,12 @@ private boolean shouldProcessMessage(cluster) {
 	return !ignoredMessage
 }
 
-def getTemperature(value) {
-	def celsius = Integer.parseInt(value, 16).shortValue() / 100
-	if(getTemperatureScale() == "C"){
-		return celsius
-	} else {
-		return celsiusToFahrenheit(celsius) as Integer
-	}
-}
-
 def uninstalled() {
 
 	log.debug "uninstalled()"
 
 	response("zcl rftd")
 
-}
-
-private Map getTemperatureResult(value) {
-	log.debug 'TEMP'
-	def linkText = getLinkText(device)
-	if (tempOffset) {
-		def offset = tempOffset as int
-		def v = value as int
-		value = v + offset
-	}
-	def descriptionText = "${linkText} was ${value}°${temperatureScale}"
-	return [
-		name: 'temperature',
-		value: value,
-		descriptionText: descriptionText
-	]
 }
 
 private String swapEndianHex(String hex) {
@@ -238,6 +189,5 @@ private getClust(){
 		SCENES: "0005",
 		ALARMS: "0009",
 		LOCK: "0101",
-		TEMP: "0402"
 	]
 }
