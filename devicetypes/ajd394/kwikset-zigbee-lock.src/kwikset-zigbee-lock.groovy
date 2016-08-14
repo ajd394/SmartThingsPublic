@@ -3,7 +3,8 @@ metadata {
 		capability "Actuator"
 		capability "Lock"
 		capability "Refresh"
-		capability "Lock Codes"
+		//capability "Lock Codes" //TODO implement lock codes
+		capability "Configuration"
 
 		fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0101", outClusters: "000A,0019"
 	}
