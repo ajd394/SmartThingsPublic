@@ -1,5 +1,5 @@
 metadata {
-	definition (name: "Kwikset HA1.0 Zigbee Lock", namespace: "ajd394", author: "Andrew DiPrinzio") {
+	definition (name: "Kwikset Zigbee Lock", namespace: "ajd394", author: "Andrew DiPrinzio") {
 		capability "Actuator"
 		capability "Lock"
 		capability "Refresh"
