@@ -85,7 +85,7 @@ def parse(String description) {
 // Lock capability commands
 def lock() {
 	sendEvent(name: "lock", value: "locking")
-	"st cmd 0x${device.deviceNetworkId} 2 0x${clust.LOCK} ${lock_cmd.LOCK} {}"
+	"st cmd 0x${device.deviceNetworkId} ${endpointId} 0x${clust.LOCK} ${lock_cmd.LOCK} {}"
 }
 
 def unlock() {
