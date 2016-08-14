@@ -1,12 +1,11 @@
 metadata {
-	definition (name: "Kwikset Zigbee Lock", namespace: "ajd394", author: "Andrew DiPrinzio") {
-		capability "Polling"
+	definition (name: "Kwikset HA1.0 Zigbee Lock", namespace: "ajd394", author: "Andrew DiPrinzio") {
 		capability "Actuator"
 		capability "Lock"
 		capability "Refresh"
 		capability "Lock Codes"
 
-		fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,0101", outClusters: "000A,0019"
+		fingerprint profileId: "0104", inClusters: "0000,0003,0004,0005,000A,0101", outClusters: "000A,0019"
 	}
 
 	// UI tile definitions
@@ -25,51 +24,14 @@ metadata {
 	}
 }
 
-// Parse incoming device messages to generate events
-def parse(String description) {
-	log.info description
-
-	Map map = [:]
-	if (description?.startsWith('catchall:')) {
-		map = parseCatchAllMessage(description)
-	} else if (description?.startsWith('read attr -')) {
-		map = parseReportAttributeMessage(description)
-	}
-	log.debug "Parse returned $map"
-	def result = map ? createEvent(map) : null
-
-
-	return result
+// Public methods
+def installed() {
+    log.trace "installed()"
 }
 
-// Commands to device
-
-def lock() {
-	sendEvent(name: "lock", value: "locking")
-	"st cmd 0x${device.deviceNetworkId} 2 0x${clust.LOCK} 0 {}"
-}
-
-def unlock() {
-	sendEvent(name: "lock", value: "unlocked")
-	"st cmd 0x${device.deviceNetworkId} 2 0x${clust.LOCK} 1 {}"
-}
-
-def poll() {
-	log.debug "polling"
-	return refresh()
-
-}
-
-def refresh() {
-	log.debug "sending refresh command"
-	//REMOVE debug only
-	configure()
-	[
-		"st rattr 0x${zigbee.deviceNetworkId} 0x${zigbee.endpointId} 0x${clust.BASIC} 4", "delay 200",
-		"st rattr 0x${zigbee.deviceNetworkId} 0x${zigbee.endpointId} 0x${clust.BASIC} 5", "delay 200",
-		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.LOCK} 0x0000", "delay 200",
-		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.BASIC} 0x0000",
-	]
+def uninstalled() {
+    log.trace "uninstalled()"
+		response("zcl rftd") //TODO evaluate necessity
 }
 
 def configure() {
@@ -79,13 +41,45 @@ def configure() {
 		//lock
 		"zcl global send-me-a-report 0x${clust.LOCK} 0x0000 0x${types.ENUM8} 5 3600 {}", "delay 200",
 		"send 0x${device.deviceNetworkId} 1 2", "delay 1500",
-
 		//bind
 		"zdo bind 0x${device.deviceNetworkId} 1 2 0x${clust.LOCK} {${device.zigbeeId}} {}", "delay 200",
-
 	]
 	//return configCmds + refresh() // send refresh cmds as part of config
     return configCmds
+}
+
+def refresh() {
+	log.trace "sending refresh command"
+	//REMOVE debug only
+	//configure()
+	[
+		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.LOCK} 0x0000", "delay 200",
+		"st rattr 0x${device.deviceNetworkId} 2 0x${clust.BASIC} 0x0000",
+	]
+}
+
+def parse(String description) {
+    log.trace "parse() --- description: $description"
+
+    Map map = [:]
+    if (description?.startsWith('read attr -')) {
+        map = parseReportAttributeMessage(description)
+    }
+
+    def result = map ? createEvent(map) : null
+    log.debug "parse() --- returned: $result"
+    return result
+}
+
+// Lock capability commands
+def lock() {
+	sendEvent(name: "lock", value: "locking")
+	"st cmd 0x${device.deviceNetworkId} 2 0x${clust.LOCK} ${lock_cmd.LOCK} {}"
+}
+
+def unlock() {
+	sendEvent(name: "lock", value: "unlocked")
+	"st cmd 0x${device.deviceNetworkId} 2 0x${clust.LOCK} ${lock_cmd.UNLOCK} {}"
 }
 
 private Map parseReportAttributeMessage(String description) {
@@ -96,7 +90,7 @@ private Map parseReportAttributeMessage(String description) {
 	log.debug "Desc Map: $descMap"
 
 	Map resultMap = [:]
-	if (descMap.cluster == "0101" && descMap.attrId == "0000") {
+	if (descMap.cluster == clust.LOCK && descMap.attrId == lock_attr.LOCKSTATE) {
 		def value = getLockStatus(descMap.value)
 		resultMap = [name: "lock", value: value]
 	}
@@ -144,14 +138,6 @@ private boolean shouldProcessMessage(cluster) {
 	return !ignoredMessage
 }
 
-def uninstalled() {
-
-	log.debug "uninstalled()"
-
-	response("zcl rftd")
-
-}
-
 private String swapEndianHex(String hex) {
 	reverseArray(hex.decodeHex()).encodeHex()
 }
@@ -170,6 +156,7 @@ private byte[] reverseArray(byte[] array) {
     return array
 }
 
+//variables
 private getTypes(){
 	[
 		INT8U: "20",
@@ -183,11 +170,23 @@ private getTypes(){
 private getClust(){
 	[
 		BASIC:"0000",
-		PWRCFG:"0001",
 		IDENTIY:"0003",
 		GROUPS: "0004",
 		SCENES: "0005",
-		ALARMS: "0009",
-		LOCK: "0101",
+		TIME: "000A",
+		LOCK: "0101"
+	]
+}
+
+private getLock_attr(){
+	[
+		LOCKSTATE:"0000"
+	]
+}
+
+private getLock_cmd(){
+	[
+		LOCK: "0",
+		UNLOCK: "1",
 	]
 }
