@@ -75,58 +75,13 @@ def parse(String description) {
     Map map = [:]
 		if (description?.startsWith('catchall:')) {
 			map = parseCatchAllMessage(description)
-		} elsif (description?.startsWith('read attr -')) {
+		} else if (description?.startsWith('read attr -')) {
         map = parseReportAttributeMessage(description)
     }
 
     def result = map ? createEvent(map) : null
     log.debug "parse() --- returned: $result"
     return result
-}
-private Map parseReportAttributeMessage(String description) {
-	Map descMap = (description - "read attr - ").split(",").inject([:]) { map, param ->
-		def nameAndValue = param.split(":")
-		map += [(nameAndValue[0].trim()):nameAndValue[1].trim()]
-	}
-	log.debug "Desc Map: $descMap"
-
-	Map resultMap = [:]
-	if (descMap.cluster == clust.LOCK && descMap.attrId == lock_attr.LOCKSTATE) {
-		def value = getLockStatus(descMap.value)
-		resultMap = [name: "lock", value: value]
-	}
-
-	return resultMap
-}
-
-def getLockStatus(value) {
-	def status = Integer.parseInt(value, 16)
-	if(status == 0 || status == 1){
-		return "locked"
-	} else {
-		return "unlocked"
-	}
-
-}
-
-private Map parseCatchAllMessage(String description) {
-	Map resultMap = [:]
-	def msg = zigbee.parse(description)
-	log.debug "msg ${msg}"
-	if (shouldProcessMessage(msg)) {
-		switch(msg.clusterId) {
-			case 0x0101:
-				if(msg.command == 0x00){
-						if(msg.data[0]== 0x00){
-							resultMap = [name: "lock", value: 'locked']
-						}
-				}else {
-					log.debug 'lock unknown data'
-				}
-				break
-		}
-	}
-	return resultMap
 }
 
 // Lock capability commands
