@@ -116,14 +116,22 @@ def off() {
 def on() {
 	zigbee.on()
 }
+/**
+ * PING is used by Device-Watch in attempt to reach the Device
+ * */
+def ping() {
+	return zigbee.onOffRefresh()
+}
 
 def refresh() {
-	zigbee.onOffRefresh() + zigbee.refreshData("0x0B04", "0x050B")
+	zigbee.onOffRefresh() + zigbee.electricMeasurementPowerRefresh()
 }
 
 def configure() {
-	sendEvent(name: "checkInterval", value: 1200, displayed: false)
-	zigbee.onOffConfig() + powerConfig() + refresh()
+	// Device-Watch allows 2 check-in misses from device
+	sendEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee"])
+	// OnOff minReportTime 0 seconds, maxReportTime 5 min. Reporting interval if no activity
+	zigbee.onOffConfig(0, 300) + powerConfig() + refresh()
 }
 
 //power config for devices with min reporting interval as 1 seconds and reporting interval if no activity as 10min (600s)

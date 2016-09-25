@@ -228,9 +228,9 @@ private Map parseIasMessage(String description) {
 	ZoneStatus zs = zigbee.parseZoneStatus(description)
 	Map resultMap = [:]
 
-	if(garageSensor !=  "Yes") {
+			if (garageSensor != "Yes"){
 		resultMap = zs.isAlarm1Set() ? getContactResult('open') : getContactResult('closed')
-	}
+			}
 
 	return resultMap
 }
@@ -306,6 +306,8 @@ private Map getBatteryResult(rawValue) {
 				def maxVolts = 3.0
 				def pct = (volts - minVolts) / (maxVolts - minVolts)
 				def roundedPct = Math.round(pct * 100)
+				if (roundedPct <= 0)
+					roundedPct = 1
 				result.value = Math.min(100, roundedPct)
 				result.descriptionText = "{{ device.displayName }} battery was {{ value }}%"
 			}
@@ -326,10 +328,11 @@ private Map getTemperatureResult(value) {
 			'{{ device.displayName }} was {{ value }}°F'
 
 	return [
-	name: 'temperature',
-	value: value,
-	descriptionText: descriptionText,
-    translatable: true
+		name: 'temperature',
+		value: value,
+		descriptionText: descriptionText,
+		translatable: true,
+		unit: temperatureScale
 	]
 }
 
@@ -364,6 +367,13 @@ private getAccelerationResult(numValue) {
 	]
 }
 
+/**
+ * PING is used by Device-Watch in attempt to reach the Device
+ * */
+def ping() {
+	return zigbee.readAttribute(0x001, 0x0020) // Read the Battery Level
+}
+
 def refresh() {
 	log.debug "Refreshing Values "
 
@@ -391,13 +401,16 @@ def refresh() {
 }
 
 def configure() {
-	sendEvent(name: "checkInterval", value: 7200, displayed: false)
+	// Device-Watch allows 2 check-in misses from device
+	sendEvent(name: "checkInterval", value: 60 * 12, displayed: false, data: [protocol: "zigbee"])
 
 	log.debug "Configuring Reporting"
 
+	// temperature minReportTime 30 seconds, maxReportTime 5 min. Reporting interval if no activity
+	// battery minReport 30 seconds, maxReportTime 6 hrs by default
 	def configCmds = enrollResponse() +
 			zigbee.batteryConfig() +
-			zigbee.temperatureConfig() +
+			zigbee.temperatureConfig(30, 300) +
 			zigbee.configureReporting(0xFC02, 0x0010, 0x18, 10, 3600, 0x01, [mfgCode: manufacturerCode]) +
 			zigbee.configureReporting(0xFC02, 0x0012, 0x29, 1, 3600, 0x0001, [mfgCode: manufacturerCode]) +
 			zigbee.configureReporting(0xFC02, 0x0013, 0x29, 1, 3600, 0x0001, [mfgCode: manufacturerCode]) +
